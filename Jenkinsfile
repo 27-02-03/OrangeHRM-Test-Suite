@@ -32,9 +32,9 @@ pipeline {
             }
         }
 
-        stage('Convert TRX to JUnit') {
+       stage('Convert TRX to JUnit') {
             steps {
-                bat 'trx2junit **/*.trx'
+                bat '"C:\\Users\\DomainUser1.HP_PC\\.dotnet\\tools\\trx2junit.exe" **\\*.trx'
             }
         }
 
