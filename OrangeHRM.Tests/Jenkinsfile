@@ -3,10 +3,11 @@ pipeline {
 
     environment {
         CI = 'true'
+        // Forces Playwright to download browsers to a specific location in the workspace
+        PLAYWRIGHT_BROWSERS_PATH = "${WORKSPACE}/pw-browsers"
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
@@ -14,34 +15,47 @@ pipeline {
             }
         }
 
-        stage('Restore Dependencies') {
+        stage('Restore & Build') {
             steps {
                 bat 'dotnet restore'
+                bat 'dotnet build --configuration Release'
             }
         }
 
-        stage('Build Project') {
+        stage('Install Playwright Browsers') {
             steps {
-                bat 'dotnet build --configuration Release'
+                // We use the direct DLL or dotnet run to ensure browsers are on the build agent
+                bat 'dotnet run --project OrangeHRM.Tests/OrangeHRM.Tests.csproj -- playwright install chromium'
             }
         }
 
         stage('Run Tests') {
             steps {
-                bat 'dotnet test --logger "trx"'
+                // Ensure results go to the folder Allure expects
+                // The --no-build flag saves time since we built in the previous stage
+                bat 'dotnet test OrangeHRM.Tests/OrangeHRM.Tests.csproj --configuration Release --no-build --logger "trx"'
             }
         }
-    }   // ✅ THIS closes stages block
+    }
 
     post {
         always {
-            archiveArtifacts artifacts: '**/TestResults/**', fingerprint: true
+            // 1. Archive the standard TRX results
+            archiveArtifacts artifacts: '**/TestResults/*.trx', fingerprint: true
+            
+            // 2. Generate Allure Report
+            // Note: This requires the 'Allure Jenkins Plugin' to be installed in Jenkins
+            script {
+                allure includeProperties: false, 
+                       jdk: '', 
+                       results: [[path: 'OrangeHRM.Tests/bin/Release/net10.0/allure-results']]
+            }
         }
         success {
-            echo '✅ Tests Passed'
+            echo 'Tests Passed'
         }
         failure {
-            echo '❌ Tests Failed'
+            echo 'Tests Failed'
         }
     }
-}   // ✅ THIS closes pipeline block
+}
