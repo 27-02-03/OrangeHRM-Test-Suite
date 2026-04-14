@@ -31,18 +31,6 @@ pipeline {
                 bat 'dotnet test --logger "trx"'
             }
         }
-
-       stage('Convert TRX to JUnit') {
-            steps {
-                bat '"C:\\Users\\DomainUser1.HP_PC\\.dotnet\\tools\\trx2junit.exe" **\\*.trx'
-            }
-        }
-
-        stage('Publish Test Results') {
-            steps {
-                junit '**/*.xml'
-            }
-        }
     }   // ✅ THIS closes stages block
 
     post {
