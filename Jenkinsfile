@@ -40,20 +40,30 @@ pipeline {
 
     post {
         always {
-            // 1. Archive the standard TRX results
+            // 1. Archive TRX results
             archiveArtifacts artifacts: '**/TestResults/*.trx', fingerprint: true
-            
-            // 2. Generate Allure Report
-            // Note: This requires the 'Allure Jenkins Plugin' to be installed in Jenkins
+    
+            // 2. Archive Allure raw results (good practice)
+            archiveArtifacts artifacts: '**/allure-results/**', fingerprint: true
+    
+            // 3. Generate Allure Report (safe execution)
             script {
-                allure includeProperties: false, 
-                       jdk: '', 
-                       results: [[path: 'OrangeHRM.Tests/bin/Release/net10.0/allure-results']]
+                try {
+                    allure([
+                        includeProperties: false,
+                        jdk: '',
+                        results: [[path: '**/allure-results']]
+                    ])
+                } catch (err) {
+                    echo '⚠️ Allure plugin not installed or failed to run.'
+                }
             }
         }
+    
         success {
             echo 'Tests Passed'
         }
+    
         failure {
             echo 'Tests Failed'
         }
