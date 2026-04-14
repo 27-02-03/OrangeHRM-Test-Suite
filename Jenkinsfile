@@ -32,18 +32,23 @@ pipeline {
             }
         }
 
-        stage('Run Tests') {
+         stage('Run Tests') {
             steps {
                 bat 'dotnet test --logger "trx"'
             }
         }
-
-        stage('Publish Test Results') {
+        
+        stage('Convert TRX to JUnit') {
             steps {
-                junit '**/*.trx'
+                bat 'trx2junit **/*.trx'
             }
         }
-    }
+        
+        stage('Publish Test Results') {
+            steps {
+                junit '**/*.xml'
+            }
+        }
 
     post {
         always {
