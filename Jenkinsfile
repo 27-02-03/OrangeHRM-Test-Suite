@@ -25,23 +25,25 @@ pipeline {
                 bat 'dotnet build --configuration Release'
             }
         }
-         stage('Run Tests') {
+
+        stage('Run Tests') {
             steps {
                 bat 'dotnet test --logger "trx"'
             }
         }
-        
+
         stage('Convert TRX to JUnit') {
             steps {
                 bat 'trx2junit **/*.trx'
             }
         }
-        
+
         stage('Publish Test Results') {
             steps {
                 junit '**/*.xml'
             }
         }
+    }   // ✅ THIS closes stages block
 
     post {
         always {
@@ -54,4 +56,4 @@ pipeline {
             echo '❌ Tests Failed'
         }
     }
-}
+}   // ✅ THIS closes pipeline block
