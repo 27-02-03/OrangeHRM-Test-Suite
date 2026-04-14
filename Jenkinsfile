@@ -25,13 +25,6 @@ pipeline {
                 bat 'dotnet build --configuration Release'
             }
         }
-
-        stage('Install Playwright Browsers') {
-            steps {
-               bat 'pwsh OrangeHRM.Tests/bin/Release/net10.0/playwright.ps1 install'
-            }
-        }
-
          stage('Run Tests') {
             steps {
                 bat 'dotnet test --logger "trx"'
