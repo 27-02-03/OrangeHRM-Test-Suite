@@ -28,7 +28,7 @@ pipeline {
 
         stage('Install Playwright Browsers') {
             steps {
-                bat 'pwsh bin/Debug/net*/playwright.ps1 install'
+               bat 'pwsh OrangeHRM.Tests/bin/Release/net10.0/playwright.ps1 install'
             }
         }
 
