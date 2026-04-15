@@ -51,15 +51,12 @@ pipeline {
             archiveArtifacts artifacts: '**/allure-results/**', fingerprint: true
 
             // ✅ Generate Allure Report (requires plugin)
-            script {
-                try {
+             script {
                     allure([
+                        commandline: 'Allure',
                         includeProperties: false,
-                        jdk: '',
-                        results: [[path: 'OrangeHRM.Tests/bin/Release/net10.0/allure-results']]
+                        results: [[path: 'OrangeHRM.Tests/bin/Debug/net10.0/allure-results']]
                     ])
-                } catch (err) {
-                    echo '⚠️ Allure plugin not installed or failed to run.'
                 }
             }
         }
