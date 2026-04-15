@@ -3,11 +3,12 @@ pipeline {
 
     environment {
         CI = 'true'
-        // Forces Playwright to download browsers to a specific location in the workspace
+        // Store Playwright browsers inside workspace (avoids reinstall issues)
         PLAYWRIGHT_BROWSERS_PATH = "${WORKSPACE}/pw-browsers"
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
@@ -24,48 +25,51 @@ pipeline {
 
         stage('Install Playwright Browsers') {
             steps {
-                // We use the direct DLL or dotnet run to ensure browsers are on the build agent
                 bat 'dotnet run --project OrangeHRM.Tests/OrangeHRM.Tests.csproj -- playwright install chromium'
             }
         }
 
         stage('Run Tests') {
             steps {
-                // Ensure results go to the folder Allure expects
-                // The --no-build flag saves time since we built in the previous stage
-                bat 'dotnet test OrangeHRM.Tests/OrangeHRM.Tests.csproj --configuration Release --no-build --logger "trx"'
+                bat '''
+                dotnet test OrangeHRM.Tests/OrangeHRM.Tests.csproj ^
+                --configuration Release ^
+                --no-build ^
+                --logger "trx" ^
+                --results-directory "OrangeHRM.Tests/bin/Release/net10.0/allure-results"
+                '''
             }
         }
     }
 
     post {
         always {
-            // 1. Archive TRX results
+            // ✅ Archive TRX test results
             archiveArtifacts artifacts: '**/TestResults/*.trx', fingerprint: true
-    
-            // 2. Archive Allure raw results (good practice)
+
+            // ✅ Archive Allure raw results
             archiveArtifacts artifacts: '**/allure-results/**', fingerprint: true
-    
-            // 3. Generate Allure Report (safe execution)
+
+            // ✅ Generate Allure Report (requires plugin)
             script {
                 try {
                     allure([
                         includeProperties: false,
                         jdk: '',
-                        results: [[path: '**/allure-results']]
+                        results: [[path: 'OrangeHRM.Tests/bin/Release/net10.0/allure-results']]
                     ])
                 } catch (err) {
                     echo '⚠️ Allure plugin not installed or failed to run.'
                 }
             }
         }
-    
+
         success {
-            echo 'Tests Passed'
+            echo '✅ Tests Passed'
         }
-    
+
         failure {
-            echo 'Tests Failed'
+            echo '❌ Tests Failed'
         }
     }
 }
