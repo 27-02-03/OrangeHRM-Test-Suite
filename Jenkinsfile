@@ -1,16 +1,17 @@
 pipeline {
     agent any
-
     environment {
         CI = 'true'
         // Forces Playwright to store browsers in the workspace to avoid permission issues
         PLAYWRIGHT_BROWSERS_PATH = "${WORKSPACE}/pw-browsers"
+        // Allure installation directory on the Jenkins agent
+        ALLURE_HOME = "C:\\allure"  // Change this to your actual Allure install path on Windows
+        ALLURE_VERSION = "2.27.0"
     }
-
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', 
+                git branch: 'main',
                     url: 'https://github.com/27-02-03/OrangeHRM-Test-Suite.git'
             }
         }
@@ -24,48 +25,102 @@ pipeline {
 
         stage('Install Playwright Browsers') {
             steps {
-                // Installs the necessary browser binaries on the Jenkins Agent
                 bat 'dotnet run --project OrangeHRM.Tests/OrangeHRM.Tests.csproj -- playwright install chromium'
+            }
+        }
+
+        stage('Install Allure CLI') {
+            steps {
+                script {
+                    // Check if Allure is already installed to avoid re-downloading every run
+                    def allureExists = bat(
+                        script: "if exist \"${ALLURE_HOME}\\bin\\allure.bat\" (echo found) else (echo notfound)",
+                        returnStdout: true
+                    ).trim()
+
+                    if (allureExists.contains('notfound')) {
+                        echo "Allure not found. Downloading and installing..."
+
+                        // Download Allure ZIP from GitHub releases
+                        bat """
+                            curl -L -o allure.zip https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.zip
+                        """
+
+                        // Extract ZIP to C:\allure (or change ALLURE_HOME above to any preferred path)
+                        bat """
+                            powershell -Command "Expand-Archive -Path allure.zip -DestinationPath C:\\ -Force"
+                            rename "C:\\allure-${ALLURE_VERSION}" allure
+                        """
+
+                        echo "Allure installed successfully at ${ALLURE_HOME}"
+                    } else {
+                        echo "Allure already installed at ${ALLURE_HOME}. Skipping download."
+                    }
+                }
             }
         }
 
         stage('Run Tests') {
             steps {
-                // Runs tests and outputs TRX and Allure results
-                // We use '|| exit 0' if you want the pipeline to continue even if tests fail
-                bat 'dotnet test OrangeHRM.Tests/OrangeHRM.Tests.csproj --configuration Release --no-build --logger "trx"'
+                // Clean previous allure-results to avoid stale data
+                bat 'if exist allure-results rmdir /s /q allure-results'
+
+                // Run tests with both TRX logger and Allure logger
+                // '--' passes extra args to the test runner
+                bat """
+                    dotnet test OrangeHRM.Tests/OrangeHRM.Tests.csproj ^
+                        --configuration Release ^
+                        --no-build ^
+                        --logger "trx" ^
+                        --logger "allure" ^
+                        -- AllureReport.ResultsDirectory=allure-results
+                """
             }
         }
     }
 
     post {
         always {
-            // 1. Archive standard TRX results for the Jenkins 'Test Result Trend'
+            // 1. Archive TRX results
             archiveArtifacts artifacts: '**/TestResults/*.trx', allowEmptyArchive: true
+
+            // 2. Archive raw allure-results as backup
+            archiveArtifacts artifacts: 'allure-results/**', allowEmptyArchive: true
 
             script {
                 try {
-                    // 2. Resolve the path to the 'allure' tool defined in Global Tool Configuration
-                    // This fixes the "Can't find allure commandline" error
-                    def allureHome = tool name: 'allure', type: 'org.allurereport.jenkins.tools.AllureCommandlineInstallation'
-                    
-                    // 3. Manually add the Allure bin folder to the environment PATH for this block
-                    withEnv(["PATH+ALLURE=${allureHome}/bin"]) {
-                        allure includeProperties: false, 
-                               jdk: '', 
-                               results: [[path: '**/allure-results']]
-                    }
+                    // 3. Generate Allure HTML report manually using the installed CLI
+                    bat """
+                        "${ALLURE_HOME}\\bin\\allure.bat" generate allure-results ^
+                            --clean ^
+                            -o allure-report
+                    """
+
+                    // 4. Publish the generated report via the Allure Jenkins Plugin
+                    allure([
+                        includeProperties: false,
+                        jdk              : '',
+                        reportBuildPolicy: 'ALWAYS',
+                        results          : [[path: 'allure-results']],
+                        report           : 'allure-report'
+                    ])
+
                 } catch (Exception e) {
-                    echo "Allure Reporting failed. Root cause: ${e.message}"
-                    echo "Ensure Java is installed on the Jenkins Agent and the Tool Name matches 'allure'."
+                    echo "⚠️ Allure Reporting failed: ${e.message}"
+                    echo "Check that:"
+                    echo "  1. Java is installed on the Jenkins agent"
+                    echo "  2. Allure was downloaded correctly to ${ALLURE_HOME}"
+                    echo "  3. The allure-results folder was generated by dotnet test"
                 }
             }
         }
+
         success {
-            echo 'Tests Passed'
+            echo 'All Tests Passed'
         }
+
         failure {
-            echo 'Tests Failed'
+            echo 'Some Tests Failed — Check the Allure Report for details'
         }
     }
 }
